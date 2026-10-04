@@ -1,0 +1,3996 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autobot",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -672,
+        -16
+      ],
+      "id": "b95ab826-d5c5-40de-9798-e2a49dc6f4bf",
+      "name": "Webhook",
+      "webhookId": "c94a2617-904d-4ea3-886d-2ef329bfc5b5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \n  FROM bot_atendimento_ti.atendimento \n  WHERE numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}'\n  AND status = 'iniciado'\n  ORDER BY data_hora DESC\n  LIMIT 1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        576,
+        -16
+      ],
+      "id": "be373ea2-1f0e-4c21-b70a-89b8c2c42abc",
+      "name": "Verifica se já tem conversa em andamento",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "object",
+                      "operation": "empty",
+                      "singleValue": true
+                    },
+                    "id": "7ed4206a-e526-4868-80cb-fbd1c618de10"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nova Conversa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a9318c85-1821-464d-ab06-d47777d75bd6",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "={{ $json.status }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Já Iniciado"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        784,
+        -16
+      ],
+      "id": "e992f2a1-8b71-4c11-bcf9-4c34ac467f35",
+      "name": "Triagem"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ \n  (() => {\n    let mensagem = \"\";\n\n    try {\n      mensagem = $(\"Webhook\").first().json.body.data.message.conversation || \"\";\n    } catch (e) {}\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Webhook\").first().json.body.data.message.extendedTextMessage.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Interpreta áudio\").first().json.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Separa interpretação em variavel\").first().json.interpretacao_imagem || \"\";\n      } catch (e) {}\n    }\n\n    return mensagem.replace(/'/g, \"''\");\n  })()\n}}',\n  'definindo',\n  'usuario'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        992,
+        -288
+      ],
+      "id": "73e5ebf2-2683-4177-b55d-b81cc3f68ec1",
+      "name": "Grava mensagem",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $('Webhook').first().json.body.data.message.conversation || $('Interpreta áudio').first().json.text}}"
+            },
+            {
+              "role": "system",
+              "content": "Você é um assistente virtual do Departamento de TI.\n\nSua função é atender os usuários de forma gentil, profissional, clara e objetiva.\n\nResponda às mensagens com educação, demonstrando disposição para ajudar.\n\nUse uma linguagem simples e acolhedora.\n\nNão faça muitas perguntas. Pergunte algo somente quando for realmente necessário para entender melhor a solicitação do usuário.\n\nQuando o problema precisar de análise técnica, informe que a solicitação será encaminhada para a equipe de TI.\n\nEvite respostas longas. Seja direto, cordial e profissional."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1744,
+        -192
+      ],
+      "id": "40236166-2513-457e-abba-3d7df85ea15b",
+      "name": "Boas vindas",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ \n  (() => {\n    let mensagem = \"\";\n\n    try {\n      mensagem = $(\"Webhook\").first().json.body.data.message.conversation || \"\";\n    } catch (e) {}\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Webhook\").first().json.body.data.message.extendedTextMessage.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Interpreta áudio\").first().json.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Separa interpretação em variavel\").first().json.interpretacao_imagem || \"\";\n      } catch (e) {}\n    }\n\n    return mensagem.replace(/'/g, \"''\");\n  })()\n}}"
+            },
+            {
+              "role": "system",
+              "content": "=Você é um classificador de mensagens para um bot de atendimento de TI.\n\nSua tarefa é analisar a mensagem enviada pelo usuário e identificar se ela é apenas uma saudação ou se o usuário já informou um problema, pedido ou necessidade.\n\nClassifique como \"saudacao\" quando a mensagem tiver apenas cumprimentos ou frases genéricas, como:\n- oi\n- olá\n- bom dia\n- boa tarde\n- boa noite\n- tudo bem?\n- preciso de ajuda\n- pode me ajudar?\n\nClassifique como \"problema\" quando o usuário já informar algo que precisa, algum erro, dificuldade, solicitação ou situação, como:\n- meu computador não liga\n- estou sem internet\n- preciso instalar um programa\n- meu e-mail não abre\n- a impressora não imprime\n- esqueci minha senha\n- o sistema está travando\n\nResponda somente em JSON válido, sem explicações e sem markdown, neste formato:\n\n{\n  \"tipo\": \"saudacao\"\n}\n\nou\n\n{\n  \"tipo\": \"problema\"\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1200,
+        -288
+      ],
+      "id": "e1f226ad-f940-4609-9e7a-22d57e19ed7d",
+      "name": "Verifica saudação",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output[0].content[0].text }}",
+                    "rightValue": "problema",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "fec63b67-dedd-4998-9bec-893190d2e8a4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Problema"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "df92aeea-df70-4705-8409-d3b8b4afa617",
+                    "leftValue": "={{ $json.output[0].content[0].text }}",
+                    "rightValue": "saudacao",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Saudação"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1536,
+        -288
+      ],
+      "id": "4fe0a5b8-f1e1-4fc6-8793-b9712403e7ab",
+      "name": "Problema ou Saudação"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        -192
+      ],
+      "id": "d657d44e-2d0e-41a1-b80d-73a87105fe49",
+      "name": "Envia Mensagem de volta",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "definido",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "04473693-880d-4aec-8a61-f705795320d6"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Sim"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b404dc36-de89-48d6-86f1-ca93afb40b07",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "=definindo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Não"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2ce98fcf-5bf2-454d-b9b1-1511ca02a6d7",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "indefinido",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Desisto"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2368,
+        672
+      ],
+      "id": "3f9660cb-02a2-485d-afdc-b80f94621b43",
+      "name": "Já sabe o que quer?"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nAtenda o usuário de forma educada, clara, objetiva e profissional.\n\nAnalise o histórico e a mensagem atual para entender o que o usuário precisa.\n\nHistórico:\n{{\n  $('Busca histórico mensagens').all()\n    .map(item => item.json)\n    .map(msg => `${msg.origem || msg.role || msg.tipo || msg.remetente || 'mensagem'}: ${msg.mensagem || msg.content || msg.texto || msg.body || JSON.stringify(msg)}`)\n    .join('\\n')\n}}\n\nRegras:\n- Responda somente em português do Brasil.\n- Use linguagem simples e acolhedora.\n- Tente entender a necessidade antes de perguntar.\n- Não peça informações que já estão no histórico.\n- Faça no máximo uma pergunta por vez.\n- Não invente status, prazos ou ações realizadas.\n- Se precisar de análise técnica, diga que será encaminhado para a equipe de TI.\n\nResponda apenas com a mensagem final para o usuário."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2784,
+        848
+      ],
+      "id": "d54d80a8-8b1c-4040-97b9-eed5d4cafcff",
+      "name": "O que tu quer?",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2576,
+        848
+      ],
+      "id": "39ae24b8-b208-40bf-9101-462f8d72011d",
+      "name": "Busca histórico mensagens",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        848
+      ],
+      "id": "eb68115f-b66b-40e6-b2a5-957b18402978",
+      "name": "Envia Mensagem de volta1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definindo',\n  'tecnico'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2288,
+        -192
+      ],
+      "id": "e90d8265-8bc8-43ec-94d6-ae0ebe3f3e78",
+      "name": "Grava mensagem1",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ \n  (() => {\n    let mensagem = \"\";\n\n    try {\n      mensagem = $(\"Webhook\").first().json.body.data.message.conversation || \"\";\n    } catch (e) {}\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Webhook\").first().json.body.data.message.extendedTextMessage.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Interpreta áudio\").first().json.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Separa interpretação em variavel\").first().json.interpretacao_imagem || \"\";\n      } catch (e) {}\n    }\n\n    return mensagem.replace(/'/g, \"''\");\n  })()\n}}',\n  'definindo',\n  'usuario'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        688
+      ],
+      "id": "1f8c2283-36e8-4c07-98e9-fb62a6364cc3",
+      "name": "Grava mensagem3",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        688
+      ],
+      "id": "56c617bf-3856-4f15-a6f3-d3bf319c4846",
+      "name": "Busca histórico mensagens1",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT assunto, resumo FROM bot_atendimento_ti.base_conhecimento",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1616,
+        688
+      ],
+      "id": "63f0994f-111d-41d9-92ce-bcf4240c97a8",
+      "name": "Consulta assuntos",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um classificador de assuntos para um atendimento de TI.\n\nSua tarefa é analisar:\n\n1. A lista de assuntos disponíveis na base de conhecimento.\n2. O histórico da conversa com o usuário.\n3. A mensagem atual do usuário.\n\nCom base nisso, identifique se existe algum assunto da base de conhecimento relacionado ao que o usuário precisa.\n\nAssuntos disponíveis:\n{{\n$('Consulta assuntos').all()\n.map(item => item.json)\n.map(item => `- Assunto: ${item.assunto}\\n  Resumo: ${item.resumo}`)\n.join('\\n')\n}}\n\nHistórico da conversa:\n{{\n$('Busca histórico mensagens1').all()\n.map(item => item.json)\n.map(msg => {\nconst origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : 'Mensagem';\nreturn `${origem}: ${msg.mensagem || ''}`;\n})\n.join('\\n')\n}}\n\nRegras:\n\n* Compare a necessidade do usuário com a lista de assuntos disponíveis.\n* Se encontrar um assunto relacionado, retorne o nome exato do assunto como está na lista.\n* Se o assunto estiver claro, o status deve ser \"definido\".\n* Se o usuário ainda não explicou claramente o problema, mas parece possível entender com mais uma pergunta simples, o status deve ser \"definindo\".\n* Prefira \"definindo\" quando a conversa ainda estiver no início ou quando o usuário ainda não teve chance de explicar melhor.\n* Use \"indefinido\" somente quando realmente não houver relação com nenhum assunto e não parecer útil continuar tentando entender.\n* Use \"indefinido\" se a conversa já estiver repetitiva, confusa, longa, ou se o usuário demonstrar frustração/cansaço.\n* Não desista cedo. Antes de marcar como \"indefinido\", verifique se ainda seria possível coletar uma informação útil com mais uma pergunta objetiva.\n* Não prolongue demais a conversa. Se já houve várias tentativas sem clareza, marque como \"indefinido\".\n* Não invente assuntos.\n* Use somente assuntos que existem na lista.\n* Responda somente em JSON válido.\n* Não escreva explicações fora do JSON.\n\nCritério de decisão:\n\n1. \"definido\": há assunto claramente relacionado na base.\n2. \"definindo\": ainda não há assunto claro, mas vale fazer mais uma pergunta para entender melhor.\n3. \"indefinido\": apenas se o usuário já mandou 5 mensagens ou mais e ainda não foi possível encontrar assunto relacionado, até então insista em extrair mais informações do usuário.\n\nFormato obrigatório da resposta:\n\n{\n\"status\": \"definido | indefinido | definindo\",\n\"assunto\": \"nome exato do assunto ou vazio\"\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        688
+      ],
+      "id": "cf65ee06-e15c-44f8-b0a4-f1226f52d3cc",
+      "name": "Já sabe o que quer?1",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Busca o texto retornado pela IA em vários formatos possíveis\nlet resposta =\n  item.output?.[0]?.content?.[0]?.text ||\n  item.output?.[0]?.text ||\n  item.output?.[0]?.content ||\n  item.content?.[0]?.text ||\n  item.text ||\n  item.response ||\n  item.message ||\n  '';\n\nlet dados = {};\n\n// Se vier como objeto, tenta aproveitar direto\nif (typeof resposta === 'object' && resposta !== null) {\n  dados = resposta;\n}\n\n// Se vier como texto, limpa e converte para JSON\nif (typeof resposta === 'string') {\n  resposta = resposta\n    .replace(/```json/g, '')\n    .replace(/```/g, '')\n    .trim();\n\n  try {\n    dados = JSON.parse(resposta);\n  } catch (error) {\n    dados = {\n      status: 'indefinido',\n      assunto: '',\n      erro_parse: true,\n      resposta_original: resposta\n    };\n  }\n}\n\n// Normaliza os campos\nconst status = String(dados.status || '').trim().toLowerCase();\nconst assunto = String(dados.assunto || '').trim();\n\nreturn [\n  {\n    json: {\n      status,\n      assunto,\n      definido: status === 'definido',\n      definindo: status === 'definindo',\n      indefinido: status === 'indefinido',\n      resposta_original: resposta\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        688
+      ],
+      "id": "2197b58a-d19d-4549-85b9-20624c9bd622",
+      "name": "Separa variáveis"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e17f6f9c-df56-4f9a-b99a-6be1b2fe7a8b",
+              "leftValue": "={{ $json.assunto }}",
+              "rightValue": "definido",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        992,
+        240
+      ],
+      "id": "1a462ae5-4b6b-44ec-8beb-587c9ea303b8",
+      "name": "Assunto definido?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT instrucao \n  FROM bot_atendimento_ti.base_conhecimento \n  WHERE assunto = '{{ $('Triagem').item.json.assunto_escolhido }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        32
+      ],
+      "id": "4df97db3-bba1-459d-afbf-f03afa973aef",
+      "name": "Consulta base de conhecimento",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\nSET \n  assunto = 'definido',\n  assunto_escolhido = '{{ $json.assunto }}'\nWHERE id = (\n  SELECT id\n  FROM bot_atendimento_ti.atendimento\n  WHERE status = 'iniciado'\n    AND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\n  ORDER BY data_hora DESC\n  LIMIT 1\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2576,
+        672
+      ],
+      "id": "662e4ec9-17a7-4e78-89c0-ac2e1bc0f9bc",
+      "name": "Grava assunto",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT instrucao \n  FROM bot_atendimento_ti.base_conhecimento \n  WHERE assunto = '{{ $json.assunto_escolhido }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2784,
+        672
+      ],
+      "id": "f7ac6acd-6cb4-44fa-aa28-bfba5ca361f0",
+      "name": "Consulta base de conhecimento1",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2992,
+        672
+      ],
+      "id": "61a4d67d-9407-4882-b940-e268c631fcbb",
+      "name": "Busca histórico mensagens2",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nSua função é continuar o atendimento com base na instrução da base de conhecimento e no histórico da conversa.\n\nBase de conhecimento:\n{{\n  $('Consulta base de conhecimento1').all()\n    .map(item => item.json)\n    .map(item => item.instrucao || JSON.stringify(item))\n    .join('\\n\\n')\n}}\n\nHistórico completo da conversa:\n{{\n  $('Busca histórico mensagens2').all()\n    .map(item => item.json)\n    .map(msg => {\n      const origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\n      return `${origem}: ${msg.mensagem || ''}`;\n    })\n    .join('\\n')\n}}\n\nRegras:\n- Responda somente em português do Brasil.\n- Use linguagem simples, educada e objetiva.\n- Analise todo o histórico antes de responder.\n- Use a base de conhecimento como guia principal.\n- Não repita perguntas que o técnico já fez no histórico.\n- Não peça informações que o usuário já informou.\n- Faça somente uma pergunta por vez.\n- Faça a próxima pergunta necessária seguindo a base de conhecimento.\n- Se a base de conhecimento já tiver dados suficientes para orientar o usuário, responda com a orientação.\n- Se ainda faltar informação essencial, pergunte apenas essa informação.\n- Se o usuário já respondeu uma pergunta anterior, avance para o próximo ponto da base.\n- Não invente procedimentos, prazos ou informações fora da base de conhecimento.\n- Não mencione que está usando histórico ou base de conhecimento.\n\nResponda apenas com a mensagem final que será enviada ao usuário."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3200,
+        672
+      ],
+      "id": "9b4243bb-076e-42c6-9648-602c7f8755a5",
+      "name": "Pergunta de acordo com a base",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3536,
+        672
+      ],
+      "id": "d01d6834-2e56-4801-91cc-a890fb967416",
+      "name": "Envia Mensagem de volta2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $('Pergunta de acordo com a base').item.json.output[0].content[0].text }}',\n  'definido',\n  'tecnico',\n  '{{ $('Grava assunto').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3744,
+        672
+      ],
+      "id": "bcf57da1-5fe0-4c44-9520-09012a7489ef",
+      "name": "Grava mensagem2",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1616,
+        32
+      ],
+      "id": "6c6a506d-56ab-4374-8818-0b9856ac1bf5",
+      "name": "Busca histórico mensagens3",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nSua função é continuar o atendimento com base no histórico da conversa e na base de conhecimento, fazendo apenas a próxima pergunta necessária.\n\nBase de conhecimento:\n{{\n$('Consulta base de conhecimento').all()\n.map(item => item.json)\n.map(item => item.instrucao || JSON.stringify(item))\n.join('\\n\\n')\n}}\n\nHistórico completo da conversa:\n{{\n$('Busca histórico mensagens3').all()\n.map(item => item.json)\n.map(msg => {\nconst origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\nreturn `${origem}: ${msg.mensagem || ''}`;\n})\n.join('\\n')\n}}\n\nRegras principais:\n\n* Responda somente em português do Brasil.\n* Use linguagem simples, educada e objetiva.\n* Analise o histórico completo antes de responder.\n* Identifique qual foi a última pergunta feita pelo bot.\n* Identifique qual foi a última resposta do usuário.\n* Se o usuário respondeu a última pergunta, não repita essa pergunta.\n* Continue a partir da resposta mais recente do usuário.\n* Faça somente uma pergunta por vez.\n* Não peça novamente uma informação que o usuário já informou.\n* Não volte para etapas anteriores da coleta, a menos que a resposta do usuário esteja contraditória ou impossível de entender.\n* Use a base de conhecimento como checklist da coleta.\n\nRegras contra repetição:\n\n* Se o bot já perguntou se existe chamado aberto e o usuário respondeu que não sabia, não pergunte novamente se já existe chamado aberto.\n* Se o usuário informou que ainda não abriu chamado ou demonstrou que não sabia da necessidade de chamado, continue a coleta das informações técnicas.\n* Se o usuário informou que a impressora está em cabo USB, não pergunte novamente se é USB ou rede.\n* Se o usuário informou que a impressora está em cabo USB, a próxima informação a solicitar deve ser o IP ou AnyDesk do computador onde a impressora está conectada.\n* Se o usuário informou que a impressora está na rede, a próxima informação a solicitar deve ser o IP da impressora.\n* Se o usuário já informou uma informação parcial, avance para a próxima informação pendente.\n\nFluxo para impressora:\n\n* Primeiro, verificar se já existe chamado aberto.\n* Se o usuário informar que já existe chamado aberto, solicitar o número do chamado.\n* Se o usuário não souber, disser que não abriu, ou demonstrar que não sabia que precisava abrir chamado, continuar a coleta técnica.\n* Perguntar se a impressora está ligada por USB ou cabo de rede.\n* Se for USB, solicitar:\n\n  * IP ou AnyDesk do computador onde a impressora está conectada;\n  * depois, IP ou AnyDesk do computador que está com problema para imprimir.\n* Se for cabo de rede, solicitar:\n\n  * IP da impressora;\n  * depois, IP do computador que está com problema.\n* Se possível, solicitar o modelo da impressora.\n* Depois de coletar as informações possíveis, perguntar se o usuário deseja abrir chamado com os dados informados.\n* Se o usuário aceitar abrir chamado, solicitar o nome completo.\n\nQuando o usuário não souber responder:\n\n* Explique de forma simples como ele pode verificar.\n* Se mesmo assim ele não conseguir informar, aceite a limitação e avance para a próxima informação possível.\n* Não insista demais na mesma pergunta.\n\nImportante:\n\n* Não diga que abriu chamado se isso ainda não foi feito por outro nó do workflow.\n* Não diga que encaminhou para equipe se isso ainda não foi feito por outro nó do workflow.\n* Não mencione histórico, base de conhecimento ou funcionamento interno do bot.\n* Não gere resumo final neste prompt.\n* A resposta deve ser apenas a próxima mensagem para o usuário.\n\nResponda apenas com a mensagem final que será enviada ao usuário.\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        -80
+      ],
+      "id": "7eaadfba-557e-4dbf-962f-e2f417d6f4ca",
+      "name": "Pergunta de acordo com a base1",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ \n  (() => {\n    let mensagem = \"\";\n\n    try {\n      mensagem = $(\"Webhook\").first().json.body.data.message.conversation || \"\";\n    } catch (e) {}\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Webhook\").first().json.body.data.message.extendedTextMessage.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Interpreta áudio\").first().json.text || \"\";\n      } catch (e) {}\n    }\n\n    if (!mensagem) {\n      try {\n        mensagem = $(\"Separa interpretação em variavel\").first().json.interpretacao_imagem || \"\";\n      } catch (e) {}\n    }\n\n    return mensagem.replace(/'/g, \"''\");\n  })()\n}}',\n  'definido',\n  'usuario',\n  '{{ $json.assunto_escolhido }}' \n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        32
+      ],
+      "id": "3612a32a-af22-4148-8ec1-8943e38c9759",
+      "name": "Grava mensagem4",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2912,
+        -80
+      ],
+      "id": "2ca006dc-86b1-4e25-ae42-9ae9b46892b5",
+      "name": "Envia Mensagem de volta3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definido',\n  'tecnico',\n  '{{ $('Assunto definido?').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3120,
+        -80
+      ],
+      "id": "e4e31d2a-bc6e-4992-bc6b-8b055b2b4f10",
+      "name": "Grava mensagem5",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definindo',\n  'tecnico',\n  ''\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3328,
+        848
+      ],
+      "id": "505e57fe-2fd6-4ebb-9138-366b872e182a",
+      "name": "Grava mensagem6",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Webhook').item.json.body.data.messageType }}",
+                    "rightValue": "imageMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8a3539ef-6cfd-4495-add5-a7b691da4289"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Imagem"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ebc5d6b3-1d81-42d0-b65e-452f4fc1c036",
+                    "leftValue": "={{ $('Webhook').item.json.body.data.messageType }}",
+                    "rightValue": "conversation",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6881eef1-3a6d-4b52-b5dc-25cad3598a49",
+                    "leftValue": "={{ $('Webhook').item.json.body.data.messageType }}",
+                    "rightValue": "audioMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Áudio"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "9619e072-fffe-46bf-9689-6dfbb4063fdb",
+      "name": "Áudio, texto ou imagem?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/chat/getBase64FromMediaMessage/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {{ JSON.stringify($('Webhook').first().json.body.data) }},\n  \"convertToMp4\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -256,
+        -176
+      ],
+      "id": "442f15c2-4cd6-4bd1-87fe-f1440c09b426",
+      "name": "Pega imagem da conversa",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "base64",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        -176
+      ],
+      "id": "864d44eb-4273-44ec-9614-33bae5023a68",
+      "name": "Converte base64 em imagem"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "text": "Você é um assistente do Departamento de TI.\n\nAnalise a imagem enviada pelo usuário e descreva apenas informações úteis para enriquecer a abertura de um chamado.\n\nIdentifique, se possível:\n- qual equipamento, sistema ou tela aparece na imagem;\n- se há alguma mensagem de erro;\n- códigos, números, nomes de sistema ou alertas visíveis;\n- sinais de problema, como tela travada, erro, cabo desconectado, impressora, computador, monitor ou sistema fora do normal.\n\nRegras:\n- Seja objetivo.\n- Não invente informações.\n- Se a imagem não tiver informação útil, responda: \"Imagem recebida, mas não foi possível identificar detalhes relevantes.\"\n- Não dê diagnóstico definitivo.\n- Não oriente o usuário a fazer procedimentos técnicos.\n- Gere apenas um resumo curto para anexar ao chamado.\n\nResposta esperada:\nUm texto curto com as informações identificadas na imagem.",
+        "inputType": "base64",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        160,
+        -176
+      ],
+      "id": "30baf66f-967d-42bd-8755-eec7d6a06e7a",
+      "name": "Interpreta imagem",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/chat/getBase64FromMediaMessage/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": {{ JSON.stringify($('Webhook').first().json.body.data) }},\n  \"convertToMp4\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -256,
+        160
+      ],
+      "id": "224c218d-0ec2-406c-9352-0c9f10453b54",
+      "name": "Pega áudio da conversa",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "base64",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        160
+      ],
+      "id": "bb9e90bc-1a48-47f2-9ab3-ee1366006440",
+      "name": "Converte base64 em áudio"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\n\nif (!item.binary?.data?.data) {\n  throw new Error('Não encontrei o áudio no campo binary.data.');\n}\n\nconst originalBinary = item.binary.data;\n\nconst fileName = `audio_${Date.now()}.ogg`;\n\nreturn [\n  {\n    json: {\n      fileName,\n      mimeType: 'audio/ogg',\n      originalFileName: originalBinary.fileName || '',\n      originalMimeType: originalBinary.mimeType || ''\n    },\n    binary: {\n      data: {\n        ...originalBinary,\n        fileName,\n        mimeType: 'audio/ogg',\n        fileExtension: 'ogg'\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        160
+      ],
+      "id": "a2665f37-a273-4529-a82c-a0c85ab53d56",
+      "name": "Converte de OPUS para OGG"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "language": "pt"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        160
+      ],
+      "id": "ae60be39-17bf-4296-94af-daa953747aa1",
+      "name": "Interpreta áudio",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\n\nlet textoImagem = '';\n\n// Caso venha como array dentro de array\nconst primeiroItem = input[0]?.json;\n\n// Tenta localizar o texto em vários formatos possíveis\nif (Array.isArray(primeiroItem)) {\n  textoImagem = primeiroItem[0]?.content?.[0]?.text || '';\n} else {\n  textoImagem =\n    primeiroItem?.content?.[0]?.text ||\n    primeiroItem?.output?.[0]?.content?.[0]?.text ||\n    primeiroItem?.text ||\n    primeiroItem?.message ||\n    '';\n}\n\n// Limpa espaços extras\ntextoImagem = String(textoImagem).trim();\n\nreturn [\n  {\n    json: {\n      interpretacao_imagem: textoImagem\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -176
+      ],
+      "id": "d6776918-5a24-423b-b5ec-0021b1bc4427",
+      "name": "Separa interpretação em variavel"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT assunto, resumo FROM bot_atendimento_ti.base_conhecimento",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1744,
+        -384
+      ],
+      "id": "6c322181-1da7-4a9e-8357-7ede6503400e",
+      "name": "Consulta assuntos1",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um classificador de assuntos para um atendimento de TI.\n\nSua tarefa é analisar:\n\n1. A lista de assuntos disponíveis na base de conhecimento.\n2. O histórico da conversa com o usuário.\n3. A mensagem atual do usuário.\n\nCom base nisso, identifique se existe algum assunto da base de conhecimento relacionado ao que o usuário precisa.\n\nAssuntos disponíveis:\n{{\n$('Consulta assuntos1').all()\n.map(item => item.json)\n.map(item => `- Assunto: ${item.assunto}\\n  Resumo: ${item.resumo}`)\n.join('\\n')\n}}\n\nHistórico da conversa:\n{{\n$('Busca histórico mensagens5').all()\n.map(item => item.json)\n.map(msg => {\nconst origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : 'Mensagem';\nreturn `${origem}: ${msg.mensagem || ''}`;\n})\n.join('\\n')\n}}\n\nRegras:\n\n* Compare a necessidade do usuário com a lista de assuntos disponíveis.\n* Se encontrar um assunto relacionado, retorne o nome exato do assunto como está na lista.\n* Se o assunto estiver claro, o status deve ser \"definido\".\n* Se o usuário ainda não explicou claramente o problema, mas parece possível entender com mais uma pergunta simples, o status deve ser \"definindo\".\n* Prefira \"definindo\" quando a conversa ainda estiver no início ou quando o usuário ainda não teve chance de explicar melhor.\n* Use \"indefinido\" somente quando realmente não houver relação com nenhum assunto e não parecer útil continuar tentando entender.\n* Use \"indefinido\" se a conversa já estiver repetitiva, confusa, longa, ou se o usuário demonstrar frustração/cansaço.\n* Se o usuário solicitar atendimento com humano, técnico, analista, atendente, suporte humano ou pedir para falar com alguém, retorne \"indefinido\".\n* Se o usuário pedir para chamar um técnico, falar com um técnico, transferir para humano, passar para atendente ou expressões semelhantes, retorne \"indefinido\".\n* Quando o status for \"indefinido\" por solicitação de atendimento humano, o campo \"assunto\" deve ser vazio.\n* Não desista cedo. Antes de marcar como \"indefinido\", verifique se ainda seria possível coletar uma informação útil com mais uma pergunta objetiva, exceto quando o usuário solicitar atendimento humano.\n* Não prolongue demais a conversa. Se já houve várias tentativas sem clareza, marque como \"indefinido\".\n* Não invente assuntos.\n* Use somente assuntos que existem na lista.\n* Responda somente em JSON válido.\n* Não escreva explicações fora do JSON.\n\nCritério de decisão:\n\n1. \"definido\": há assunto claramente relacionado na base.\n2. \"definindo\": ainda não há assunto claro, mas vale fazer mais uma pergunta para entender melhor.\n3. \"indefinido\": use se o usuário solicitar atendimento humano, técnico, analista ou atendente. Também use se o usuário já mandou 5 mensagens ou mais e ainda não foi possível encontrar assunto relacionado.\n\nFormato obrigatório da resposta:\n\n{\n\"status\": \"definido | indefinido | definindo\",\n\"assunto\": \"nome exato do assunto ou vazio\"\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2160,
+        -384
+      ],
+      "id": "1395062d-2d2b-4a44-970d-00257b002e8e",
+      "name": "Já sabe o que quer?2",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1952,
+        -384
+      ],
+      "id": "225b69a9-ba3c-4af5-8d1b-2bb82a689879",
+      "name": "Busca histórico mensagens5",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Busca o texto retornado pela IA em vários formatos possíveis\nlet resposta =\n  item.output?.[0]?.content?.[0]?.text ||\n  item.output?.[0]?.text ||\n  item.output?.[0]?.content ||\n  item.content?.[0]?.text ||\n  item.text ||\n  item.response ||\n  item.message ||\n  '';\n\nlet dados = {};\n\n// Se vier como objeto, tenta aproveitar direto\nif (typeof resposta === 'object' && resposta !== null) {\n  dados = resposta;\n}\n\n// Se vier como texto, limpa e converte para JSON\nif (typeof resposta === 'string') {\n  resposta = resposta\n    .replace(/```json/g, '')\n    .replace(/```/g, '')\n    .trim();\n\n  try {\n    dados = JSON.parse(resposta);\n  } catch (error) {\n    dados = {\n      status: 'indefinido',\n      assunto: '',\n      erro_parse: true,\n      resposta_original: resposta\n    };\n  }\n}\n\n// Normaliza os campos\nconst status = String(dados.status || '').trim().toLowerCase();\nconst assunto = String(dados.assunto || '').trim();\n\nreturn [\n  {\n    json: {\n      status,\n      assunto,\n      definido: status === 'definido',\n      definindo: status === 'definindo',\n      indefinido: status === 'indefinido',\n      resposta_original: resposta\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        -384
+      ],
+      "id": "cf78a289-98b1-46aa-9081-9fc47d602728",
+      "name": "Separa variáveis1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "definido",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "04473693-880d-4aec-8a61-f705795320d6"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Sim"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b404dc36-de89-48d6-86f1-ca93afb40b07",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "=definindo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Não"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2ce98fcf-5bf2-454d-b9b1-1511ca02a6d7",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "indefinido",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Desisto"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2704,
+        -400
+      ],
+      "id": "6b776121-d562-4de7-b971-8f9f7bb82a53",
+      "name": "Já sabe o que quer?3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\nSET \n  assunto = 'definido',\n  assunto_escolhido = '{{ $json.assunto }}'\nWHERE id = (\n  SELECT id\n  FROM bot_atendimento_ti.atendimento\n  WHERE status = 'iniciado'\n    AND numero = '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt }}'\n  ORDER BY data_hora DESC\n  LIMIT 1\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2928,
+        -528
+      ],
+      "id": "89f875ce-f269-4098-9596-c2c4a19ef9a9",
+      "name": "Grava assunto1",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT instrucao \n  FROM bot_atendimento_ti.base_conhecimento \n  WHERE assunto = '{{ $json.assunto_escolhido }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3136,
+        -528
+      ],
+      "id": "6c22aded-2dca-4911-9de3-4dd1d7c84837",
+      "name": "Consulta base de conhecimento2",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT origem, mensagem\nFROM bot_atendimento_ti.atendimento\nWHERE status = 'iniciado'\nAND numero = '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt}}'\nORDER BY data_hora ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3344,
+        -528
+      ],
+      "id": "99c2e81b-23b3-468f-8f1d-3b69df6d53be",
+      "name": "Busca histórico mensagens6",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nSua função é continuar o atendimento com base na instrução da base de conhecimento e no histórico da conversa.\n\nBase de conhecimento:\n{{\n  $('Consulta base de conhecimento2').all()\n    .map(item => item.json)\n    .map(item => item.instrucao || JSON.stringify(item))\n    .join('\\n\\n')\n}}\n\nHistórico completo da conversa:\n{{\n  $('Busca histórico mensagens6').all()\n    .map(item => item.json)\n    .map(msg => {\n      const origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\n      return `${origem}: ${msg.mensagem || ''}`;\n    })\n    .join('\\n')\n}}\n\nRegras:\n- Responda somente em português do Brasil.\n- Use linguagem simples, educada e objetiva.\n- Analise todo o histórico antes de responder.\n- Use a base de conhecimento como guia principal.\n- Não repita perguntas que o técnico já fez no histórico.\n- Não peça informações que o usuário já informou.\n- Faça somente uma pergunta por vez.\n- Faça a próxima pergunta necessária seguindo a base de conhecimento.\n- Se a base de conhecimento já tiver dados suficientes para orientar o usuário, responda com a orientação.\n- Se ainda faltar informação essencial, pergunte apenas essa informação.\n- Se o usuário já respondeu uma pergunta anterior, avance para o próximo ponto da base.\n- Não invente procedimentos, prazos ou informações fora da base de conhecimento.\n- Não mencione que está usando histórico ou base de conhecimento.\n\nResponda apenas com a mensagem final que será enviada ao usuário."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3552,
+        -528
+      ],
+      "id": "9864c9f3-5f91-470d-b3ad-00142fe0f921",
+      "name": "Pergunta de acordo com a base2",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3888,
+        -528
+      ],
+      "id": "7aa98b2a-665c-4d9a-bebf-543ea050e290",
+      "name": "Envia Mensagem de volta4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').first().json.body.data.key.remoteJid || $('Webhook').first().json.body.data.key.remoteJidAlt }}',\n  '{{ $('Pergunta de acordo com a base2').item.json.output[0].content[0].text }}',\n  'definido',\n  'tecnico',\n  '{{ $('Grava assunto1').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4096,
+        -528
+      ],
+      "id": "1773d46b-04a0-4bb6-aa20-c3340088aabc",
+      "name": "Grava mensagem7",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um avaliador de atendimento de TI.\n\nAnalise o histórico completo da conversa em comparação com a base de conhecimento atual e decida qual deve ser o próximo passo do bot.\n\nHistórico da conversa:\n{{\n$('Busca histórico mensagens3').all()\n.map(item => item.json)\n.map(msg => {\nconst origem = msg.origem === 'usuario'\n? 'Usuário'\n: msg.origem === 'tecnico'\n? 'Técnico'\n: msg.origem || 'Mensagem';\n\nreturn `${origem}: ${msg.mensagem || ''}`;\n})\n.join('\\n')\n}}\n\nBase de conhecimento atual:\n{{\n$('Consulta base de conhecimento').all()\n.map(item => item.json)\n.map(item => item.instrucao || JSON.stringify(item))\n.join('\\n\\n')\n}}\n\nObjetivo:\n\nDecidir se o bot deve:\n\n* continuar coletando informações;\n* encerrar a coleta para abrir um novo chamado;\n* finalizar porque já existe um chamado aberto;\n* finalizar sem abrir chamado;\n* interromper o fluxo atual porque o usuário mudou de assunto.\n\nStatus possíveis:\n\n* `continuar`\n* `encerrar`\n* `finalizar_com_chamado`\n* `finalizar_sem_chamado`\n* `mudou_assunto`\n\nRegras principais:\n\n* Use a base de conhecimento atual como checklist obrigatório de coleta.\n* Analise o histórico completo, mas dê maior importância à mensagem mais recente do usuário.\n* Identifique qual é o assunto que estava sendo tratado antes da mensagem mais recente.\n* Compare a mensagem mais recente do usuário com esse assunto.\n* Não avalie solução técnica. Avalie somente o andamento da coleta.\n* Não repita perguntas que já foram respondidas.\n* Não encerre a coleta somente porque o usuário explicou o problema de forma básica.\n* Continue enquanto ainda houver uma informação importante, simples e possível de coletar.\n* Se o usuário solicitar atendimento humano, atendente, técnico ou analista, interrompa imediatamente o fluxo automático e responda `finalizar_sem_chamado`.\n\nSolicitação de atendimento humano:\n\nUse obrigatoriamente o status `finalizar_sem_chamado` quando o usuário demonstrar que deseja falar com uma pessoa.\n\nConsidere como solicitação de atendimento humano frases como:\n\n* “quero falar com um atendente”;\n* “quero falar com uma pessoa”;\n* “quero falar com um humano”;\n* “me passa para um atendente”;\n* “me transfira para um atendente”;\n* “quero falar com o suporte”;\n* “quero falar com o TI”;\n* “quero falar com um técnico”;\n* “quero falar com um analista”;\n* “chama um analista”;\n* “preciso de atendimento humano”;\n* “não quero falar com o robô”;\n* “não quero continuar com o bot”;\n* “quero atendimento presencial”;\n* qualquer outra frase com o mesmo significado.\n\nRegras para atendimento humano:\n\n* Essa regra tem prioridade sobre todas as outras decisões.\n* Use `finalizar_sem_chamado` mesmo que ainda faltem informações da base de conhecimento.\n* Use `finalizar_sem_chamado` mesmo que o usuário tenha mudado de assunto.\n* Use `finalizar_sem_chamado` mesmo que o usuário ainda não tenha informado se possui chamado aberto.\n* Não continue fazendo perguntas depois que o usuário solicitar atendimento humano.\n* Não use `mudou_assunto` quando a nova mensagem for apenas um pedido para falar com um atendente.\n* No campo `motivo`, informe brevemente que o usuário solicitou atendimento humano.\n\nIdentificação de mudança de assunto:\n\nUse o status `mudou_assunto` quando a mensagem mais recente do usuário apresentar uma nova solicitação que não pertence à base de conhecimento atual.\n\nConsidere que houve mudança de assunto quando:\n\n* o usuário passa a relatar outro problema diferente;\n* o usuário solicita outro serviço;\n* o usuário abandona o problema anterior e inicia uma nova necessidade;\n* a nova mensagem exigiria outra base de conhecimento para continuar o atendimento;\n* o usuário utiliza expressões como:\n\n  * “mudando de assunto”;\n  * “tenho outro problema”;\n  * “preciso de outra coisa”;\n  * “aproveitando”;\n  * “também estou com outro problema”;\n  * “agora preciso de ajuda com”.\n\nExemplos de mudança de assunto:\n\n* O atendimento atual é sobre impressora e o usuário solicita acesso a uma rotina do WinThor.\n* O atendimento atual é sobre derrubar uma sessão no WinThor e o usuário relata que o computador está lento.\n* O atendimento atual é sobre aquisição de equipamento e o usuário solicita redefinição de senha.\n* O atendimento atual é sobre erro em um sistema e o usuário passa a pedir instalação de um programa.\n\nNão considere mudança de assunto quando:\n\n* o usuário solicitar atendimento humano;\n* o usuário responder à última pergunta feita pelo bot;\n* o usuário fornecer matrícula, nome, setor, filial, IP, AnyDesk, modelo ou outro dado solicitado;\n* o usuário corrigir uma informação já fornecida;\n* o usuário acrescentar detalhes sobre o mesmo problema;\n* o usuário mencionar outro sistema ou equipamento apenas para explicar o problema atual;\n* o usuário responder apenas “sim”, “não”, “não sei”, “pode abrir”, “é urgente” ou algo semelhante;\n* o usuário agradecer sem apresentar uma nova solicitação;\n* a mensagem ainda puder ser atendida pela mesma base de conhecimento.\n\nRegra importante para mudança de assunto:\n\nAntes de decidir `continuar`, verifique obrigatoriamente se a mensagem mais recente ainda pertence ao assunto atual.\n\nSe a mensagem mais recente apresentar claramente outro problema ou outra solicitação, responda `mudou_assunto`, mesmo que a coleta anterior ainda esteja incompleta.\n\nEm caso de dúvida entre `continuar` e `mudou_assunto`, use `continuar`.\n\nChecklist de decisão:\n\nAntes de responder `encerrar`, verifique:\n\n1. O usuário solicitou falar com um atendente, técnico, analista ou pessoa?\n2. O usuário já informou se possui chamado aberto?\n3. Se informou que já possui chamado aberto, forneceu o número do chamado?\n4. As informações principais solicitadas pela base de conhecimento já foram coletadas?\n5. Se alguma informação não foi coletada, o usuário informou que não sabe ou não consegue fornecê-la?\n6. O usuário confirmou que deseja abrir um chamado?\n7. O nome completo necessário para abertura do chamado já foi informado?\n8. A mensagem mais recente ainda pertence ao assunto atual?\n\nSe o usuário solicitou atendimento humano, responda imediatamente `finalizar_sem_chamado`.\n\nCritérios de decisão:\n\n`finalizar_sem_chamado`:\n\nUse prioritariamente quando o usuário solicitar falar com um atendente, técnico, analista, pessoa ou atendimento humano.\n\nTambém use quando:\n\n* o usuário disser que não deseja abrir chamado;\n* o usuário recusar a abertura;\n* o usuário encerrar a conversa sem apresentar uma nova solicitação;\n* o usuário apenas agradecer depois de recusar a abertura;\n* não houver informações mínimas para abrir um chamado útil e não fizer sentido continuar;\n* a conversa estiver repetitiva ou confusa e continuar perguntando não for útil.\n\n`mudou_assunto`:\n\nUse quando a mensagem mais recente apresentar claramente uma nova solicitação diferente daquela tratada pela base de conhecimento atual, desde que não seja um pedido de atendimento humano.\n\n`continuar`:\n\nUse quando:\n\n* ainda faltar uma informação importante da base de conhecimento;\n* ainda faltar perguntar se o usuário possui chamado aberto;\n* o usuário informou que já possui chamado, mas não forneceu o número;\n* ainda faltar perguntar se deseja abrir o chamado;\n* ainda faltar o nome completo necessário para a abertura;\n* ainda existir uma próxima pergunta útil e simples;\n* não houver certeza suficiente de que o usuário mudou de assunto.\n\n`encerrar`:\n\nUse somente quando:\n\n* as informações principais já foram coletadas;\n* o usuário confirmou que deseja abrir o chamado;\n* o nome completo necessário já foi informado;\n* não existe outra informação importante e possível de coletar;\n* o fluxo pode seguir para a criação de um novo chamado.\n\nTambém use `encerrar` quando o usuário não souber algum dado técnico, mas já existirem informações suficientes para abrir um chamado útil e ele tiver confirmado a abertura.\n\n`finalizar_com_chamado`:\n\nUse quando o usuário informar que já possui um chamado aberto sobre o problema atual e também fornecer o número desse chamado, desde que não tenha solicitado atendimento humano.\n\nOrdem obrigatória de avaliação:\n\n1. Verifique se o usuário solicitou atendimento humano.\n2. Verifique se a mensagem mais recente representa mudança de assunto.\n3. Verifique se o usuário já possui chamado aberto.\n4. Verifique se ainda faltam informações da base de conhecimento.\n5. Verifique se o usuário confirmou a abertura do chamado.\n6. Escolha o status final.\n\nRegras específicas:\n\n* Se o usuário solicitar atendimento humano, responda `finalizar_sem_chamado`.\n* Se houve mudança clara de assunto, responda `mudou_assunto`.\n* Se o usuário possui chamado aberto, mas não informou o número, responda `continuar`.\n* Se o usuário possui chamado aberto e informou o número, responda `finalizar_com_chamado`.\n* Se ainda falta perguntar se deseja abrir chamado, responda `continuar`.\n* Se ainda falta solicitar o nome completo necessário, responda `continuar`.\n* Se ainda falta uma informação técnica importante, responda `continuar`.\n* Se o usuário não souber uma informação técnica, aceite e siga para a próxima.\n* Se todas as informações possíveis foram coletadas e o usuário deseja abrir chamado, responda `encerrar`.\n* Não use `encerrar` no meio da coleta.\n* Não use `finalizar_com_chamado` quando o usuário solicitar atendimento humano.\n* Não use `mudou_assunto` para um pedido de atendimento humano.\n* Não use `mudou_assunto` somente porque o usuário utilizou palavras diferentes.\n* Não use `mudou_assunto` para respostas curtas relacionadas à última pergunta.\n* Ao usar `mudou_assunto`, explique brevemente qual era o assunto anterior e qual é o novo assunto identificado.\n\nResponda somente em JSON válido, sem markdown, sem comentários e sem texto adicional:\n\n{\n\"status\": \"encerrar | continuar | finalizar_sem_chamado | finalizar_com_chamado | mudou_assunto\",\n\"motivo\": \"explicação curta\",\n\"assunto_anterior\": \"assunto que estava sendo tratado ou null\",\n\"novo_assunto\": \"novo assunto identificado ou null\"\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        32
+      ],
+      "id": "652ad0fa-831a-4ad7-9a21-8a954f3355b7",
+      "name": "Já pode encerrar?",
+      "alwaysOutputData": false,
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nlet resposta =\n  item.output?.[0]?.content?.[0]?.text ||\n  item.output?.[0]?.text ||\n  item.content?.[0]?.text ||\n  item.text ||\n  item.response ||\n  item.message ||\n  item;\n\n// Se vier array\nif (Array.isArray(resposta)) {\n  resposta =\n    resposta[0]?.content?.[0]?.text ||\n    resposta[0]?.text ||\n    resposta[0]?.content ||\n    resposta[0];\n}\n\n// Se vier objeto com conteúdo\nif (typeof resposta === 'object' && resposta !== null) {\n  resposta =\n    resposta.content?.[0]?.text ||\n    resposta.output?.[0]?.content?.[0]?.text ||\n    resposta.text ||\n    resposta.response ||\n    resposta.message ||\n    resposta;\n}\n\nlet dados = {};\n\nif (typeof resposta === 'string') {\n  resposta = resposta\n    .replace(/```json/g, '')\n    .replace(/```/g, '')\n    .trim();\n\n  try {\n    dados = JSON.parse(resposta);\n  } catch (error) {\n    dados = {\n      status: 'continuar',\n      motivo: 'Não foi possível interpretar a resposta da IA.',\n      erro_parse: true,\n      resposta_original: resposta\n    };\n  }\n} else {\n  dados = resposta;\n}\n\nconst status = String(dados.status || '').trim().toLowerCase();\nconst motivo = String(dados.motivo || '').trim();\n\nreturn [\n  {\n    json: {\n      status,\n      motivo,\n      encerrar: status === 'encerrar',\n      continuar: status === 'continuar',\n      resposta_original: dados\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        32
+      ],
+      "id": "8ad8f7c8-ac2d-4e45-8981-027aeb4c73b4",
+      "name": "Separa variáveis2",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resposta_original.status }}",
+                    "rightValue": "continuar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5777dd10-a9df-4546-b179-5a4c30a5855f"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Continuar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "04f1d7a4-b555-4fc7-8152-bdb7171499a3",
+                    "leftValue": "={{ $json.resposta_original.status }}",
+                    "rightValue": "encerrar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Encerrar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4f1ec8ca-33ab-40c3-a118-4db3b41c6f64",
+                    "leftValue": "={{ $json.resposta_original.status }}",
+                    "rightValue": "finalizar_sem_chamado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Fim sem chamado"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9fbb6b7b-2afa-453d-aaa4-79174f557c2b",
+                    "leftValue": "={{ $json.resposta_original.status }}",
+                    "rightValue": "=finalizar_com_chamado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Fim com chamado"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "dce252d5-d987-4e2a-8875-261b37c9180d",
+                    "leftValue": "={{ $json.resposta_original.status }}",
+                    "rightValue": "mudou_assunto",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Mudou assunto"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2368,
+        0
+      ],
+      "id": "598c3134-6f52-4e8b-a660-fa925487c7dc",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nSua tarefa é gerar duas informações separadas com base no histórico da conversa:\n\n1. Um título curto para o chamado.\n2. Um resumo objetivo das informações fornecidas pelo usuário.\n\nHistórico da conversa:\n{{\n  $('Busca histórico mensagens3').all()\n    .map(item => item.json)\n    .map(msg => {\n      const origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\n      return `${origem}: ${msg.mensagem || ''}`;\n    })\n    .join('\\n')\n}}\n\nRegras:\n- Responda somente em JSON válido.\n- Não escreva explicações fora do JSON.\n- O título deve ser curto, claro e adequado para abertura de chamado.\n- O resumo deve conter apenas as informações úteis fornecidas pelo usuário.\n- Não invente informações.\n- Não prometa prazo.\n- Não mencione histórico, base de conhecimento ou funcionamento interno do bot.\n- Não informe número de chamado, a menos que ele esteja claramente disponível no JSON de entrada.\n\nFormato obrigatório da resposta:\n\n{\n  \"titulo\": \"título curto do chamado\",\n  \"resumo\": \"resumo curto das informações fornecidas pelo usuário\"\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        96
+      ],
+      "id": "3aa5cdcd-7cad-4300-8dd8-f2b1f655aef4",
+      "name": "Resumo do atendimento e encerramento",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=Resumo: {{ $json.resposta_original.resumo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        96
+      ],
+      "id": "c480b574-77a2-4606-b0bf-addd083866ca",
+      "name": "Envia Mensagem de volta5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definido',\n  'tecnico',\n  '{{ $('Assunto definido?').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3328,
+        96
+      ],
+      "id": "ecc631cd-74d9-4805-8005-e1c1c9ee7162",
+      "name": "Grava mensagem8",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/apirest.php/initSession?user_token=xxxxxxxxxxxxxxxxxxxx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "App-Token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4288,
+        96
+      ],
+      "id": "51268a84-6351-4f33-aa54-a474bf738dc9",
+      "name": "GLPI Sup - Iniciar Sessão"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/apirest.php/Ticket",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "App-Token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Session-Token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"input\": {\n    \"name\": \"{{ $('Separa variáveis da resposta1').item.json.titulo }}\",\n    \"content\": \"{{ $('Separa variáveis da resposta1').item.json.resumo }}\",\n    \"entities_id\": 0,\n    \"type\": 2,\n    \"status\": 1,\n    \"_users_id_requester\": 580,\n    \"itilcategories_id\": {{ $('Define categoria').item.json.output[0].content[0].text }},\n    \"slas_id_ttr\": 29,\n    \"urgency\": 3,\n    \"impact\": 3,\n    \"priority\": 3,\n    \"requesttypes_id\": 1\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4496,
+        96
+      ],
+      "id": "7d309582-65a8-49d2-860a-53f579a9e0e4",
+      "name": "GLPI Sup - Abre Chamado"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('Resumo do atendimento e encerramento').first().json;\n\nlet resposta =\n  item.output?.[0]?.content?.[0]?.text ||\n  item.output?.[0]?.text ||\n  item.content?.[0]?.text ||\n  item.text ||\n  item.response ||\n  item.message ||\n  item;\n\n// Se vier array\nif (Array.isArray(resposta)) {\n  resposta =\n    resposta[0]?.content?.[0]?.text ||\n    resposta[0]?.text ||\n    resposta[0]?.content ||\n    resposta[0];\n}\n\n// Se vier objeto\nif (typeof resposta === 'object' && resposta !== null) {\n  resposta =\n    resposta.content?.[0]?.text ||\n    resposta.output?.[0]?.content?.[0]?.text ||\n    resposta.text ||\n    resposta.response ||\n    resposta.message ||\n    resposta;\n}\n\nlet dados = {};\n\nif (typeof resposta === 'string') {\n  resposta = resposta\n    .replace(/```json/g, '')\n    .replace(/```/g, '')\n    .trim();\n\n  try {\n    dados = JSON.parse(resposta);\n  } catch (error) {\n    dados = {\n      titulo: 'Chamado de TI',\n      resumo: resposta,\n      erro_parse: true\n    };\n  }\n} else {\n  dados = resposta;\n}\n\nconst titulo = String(dados.titulo || 'Chamado de TI').trim();\nconst resumo = String(dados.resumo || '').trim();\n\nreturn [\n  {\n    json: {\n      titulo,\n      resumo,\n      erro_parse: dados.erro_parse || false,\n      resposta_original: dados\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        96
+      ],
+      "id": "6878b960-0ec9-4472-af3b-6422bf0cb403",
+      "name": "Separa variáveis da resposta1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\n  SET status = 'finalizado'\nWHERE numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4704,
+        96
+      ],
+      "id": "253ce884-da34-40a3-a12e-b31e57624f12",
+      "name": "Encerra atendimento",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\nChamado aberto: {{ $('GLPI Sup - Abre Chamado').item.json.id }}\n*ATENDIMENTO ENCERRADO*"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4912,
+        96
+      ],
+      "id": "af5ea71c-1bff-4d62-a14a-cbea235e3b06",
+      "name": "Informa o número do chamado aberto",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.mensagem }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        272
+      ],
+      "id": "d7583843-2463-439b-9a89-dd01f4f642e4",
+      "name": "Envia Mensagem de volta6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definido',\n  'tecnico',\n  '{{ $('Assunto definido?').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3328,
+        272
+      ],
+      "id": "54a080ce-0f81-45ea-b413-8962b93dcdeb",
+      "name": "Grava mensagem9",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\n  SET status = 'finalizado'\nWHERE numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3536,
+        272
+      ],
+      "id": "a6005e0b-5f71-4ede-a59f-73e39a856214",
+      "name": "Encerra atendimento1",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'indefinido',\n  'tecnico',\n  ''\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2784,
+        1024
+      ],
+      "id": "b6e10212-f8d8-463a-976f-fd6d3af7bfe0",
+      "name": "Grava mensagem10",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\n  SET status = 'finalizado'\nWHERE numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2992,
+        1024
+      ],
+      "id": "4e20ec57-0156-4438-b423-64a2bc72390b",
+      "name": "Encerra atendimento2",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/conversations/{{ $json.body.data.chatwootConversationId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -464,
+        -16
+      ],
+      "id": "b663cb6c-d1b2-45cf-b20a-aeaf95f4b886",
+      "name": "Verifica chatwoot se conversa está atribuida"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eab8fb4c-ed3b-4f1e-9048-82abdedeeec9",
+              "leftValue": "={{ !$json.meta?.assignee?.id }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -256,
+        -16
+      ],
+      "id": "64b493aa-f903-4953-af06-4a5d059ae6ba",
+      "name": "Está atribuida?"
+    },
+    {
+      "parameters": {
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/agents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3200,
+        1024
+      ],
+      "id": "b39765e4-734f-4f32-bcbc-adab47f8c9be",
+      "name": "Lista Agentes Chatwoot1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const itensDoNoAgentes = $('Lista Agentes Chatwoot1').all();\n\nlet agentes = itensDoNoAgentes.map(item => item.json);\n\n// Remove inválidos\nagentes = agentes.filter(agente => agente && agente.id);\n\n// Mantém somente agentes confirmados\nagentes = agentes.filter(agente => agente.confirmed === true);\n\n// Remove administrador / DTI\nagentes = agentes.filter(agente => agente.role === 'agent');\n\n// Se quiser ignorar alguém específico, coloque o ID aqui\nconst idsIgnorados = [\n  // 6, // Alailson, se quiser testar excluindo ele\n];\n\nagentes = agentes.filter(agente => !idsIgnorados.includes(agente.id));\n\nif (!agentes.length) {\n  throw new Error('Nenhum agente válido encontrado para atribuição.');\n}\n\n// Sorteio\nconst indice = Math.floor(Math.random() * agentes.length);\nconst agenteEscolhido = agentes[indice];\n\nreturn [\n  {\n    json: {\n      assignee_id: agenteEscolhido.id,\n      nome_agente: agenteEscolhido.name || agenteEscolhido.available_name || '',\n      email_agente: agenteEscolhido.email || '',\n      indice_sorteado: indice,\n      total_itens_do_no_agentes: itensDoNoAgentes.length,\n      total_agentes_validos: agentes.length,\n      agentes_considerados: agentes.map(a => ({\n        id: a.id,\n        nome: a.name || a.available_name,\n        email: a.email,\n        status: a.availability_status,\n        confirmed: a.confirmed,\n        role: a.role\n      }))\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        1024
+      ],
+      "id": "fa4c5810-2a77-4055-b403-d9fb4a7ebaa4",
+      "name": "Escolhe agente aleatorio1",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/conversations/{{ $('Webhook').first().json.body.data.chatwootConversationId }}/assignments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    assignee_id: $('Escolhe agente aleatorio1').first().json.assignee_id\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3616,
+        1024
+      ],
+      "id": "32fa3b05-e3b9-4ce6-b91c-912be1d456ae",
+      "name": "Atribui Conversa ao Agente"
+    },
+    {
+      "parameters": {
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/agents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3760,
+        272
+      ],
+      "id": "356e8d3e-4e74-4663-ba35-635816bdac79",
+      "name": "Lista Agentes Chatwoot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const itensDoNoAgentes = $('Lista Agentes Chatwoot').all();\n\nlet agentes = itensDoNoAgentes.map(item => item.json);\n\n// Remove inválidos\nagentes = agentes.filter(agente => agente && agente.id);\n\n// Mantém somente agentes confirmados\nagentes = agentes.filter(agente => agente.confirmed === true);\n\n// Remove administrador / DTI\nagentes = agentes.filter(agente => agente.role === 'agent');\n\n// Se quiser ignorar alguém específico, coloque o ID aqui\nconst idsIgnorados = [\n  // 6, // Alailson, se quiser testar excluindo ele\n];\n\nagentes = agentes.filter(agente => !idsIgnorados.includes(agente.id));\n\nif (!agentes.length) {\n  throw new Error('Nenhum agente válido encontrado para atribuição.');\n}\n\n// Sorteio\nconst indice = Math.floor(Math.random() * agentes.length);\nconst agenteEscolhido = agentes[indice];\n\nreturn [\n  {\n    json: {\n      assignee_id: agenteEscolhido.id,\n      nome_agente: agenteEscolhido.name || agenteEscolhido.available_name || '',\n      email_agente: agenteEscolhido.email || '',\n      indice_sorteado: indice,\n      total_itens_do_no_agentes: itensDoNoAgentes.length,\n      total_agentes_validos: agentes.length,\n      agentes_considerados: agentes.map(a => ({\n        id: a.id,\n        nome: a.name || a.available_name,\n        email: a.email,\n        status: a.availability_status,\n        confirmed: a.confirmed,\n        role: a.role\n      }))\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3968,
+        272
+      ],
+      "id": "3cf05bb2-f992-4cd0-aa73-ed57c1c33702",
+      "name": "Escolhe agente aleatorio",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/conversations/{{ $('Webhook').first().json.body.data.chatwootConversationId }}/assignments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    assignee_id: $('Escolhe agente aleatorio').first().json.assignee_id\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4176,
+        272
+      ],
+      "id": "7854ee1b-2413-45d0-8b4b-ee008e2cb931",
+      "name": "Atribui Conversa ao Agente1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/conversations/{{ $('Webhook').first().json.body.data.chatwootConversationId }}/assignments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    assignee_id: $('Escolhe agente aleatorio2').first().json.assignee_id\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5536,
+        96
+      ],
+      "id": "c6809582-7774-4e6a-8f1c-f323ebe628c6",
+      "name": "Atribui Conversa ao Agente2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const itensDoNoAgentes = $('Lista Agentes Chatwoot2').all();\n\nlet agentes = itensDoNoAgentes.map(item => item.json);\n\n// Remove inválidos\nagentes = agentes.filter(agente => agente && agente.id);\n\n// Mantém somente agentes confirmados\nagentes = agentes.filter(agente => agente.confirmed === true);\n\n// Remove administrador / DTI\nagentes = agentes.filter(agente => agente.role === 'agent');\n\n// Se quiser ignorar alguém específico, coloque o ID aqui\nconst idsIgnorados = [\n  // 6, // Alailson, se quiser testar excluindo ele\n];\n\nagentes = agentes.filter(agente => !idsIgnorados.includes(agente.id));\n\nif (!agentes.length) {\n  throw new Error('Nenhum agente válido encontrado para atribuição.');\n}\n\n// Sorteio\nconst indice = Math.floor(Math.random() * agentes.length);\nconst agenteEscolhido = agentes[indice];\n\nreturn [\n  {\n    json: {\n      assignee_id: agenteEscolhido.id,\n      nome_agente: agenteEscolhido.name || agenteEscolhido.available_name || '',\n      email_agente: agenteEscolhido.email || '',\n      indice_sorteado: indice,\n      total_itens_do_no_agentes: itensDoNoAgentes.length,\n      total_agentes_validos: agentes.length,\n      agentes_considerados: agentes.map(a => ({\n        id: a.id,\n        nome: a.name || a.available_name,\n        email: a.email,\n        status: a.availability_status,\n        confirmed: a.confirmed,\n        role: a.role\n      }))\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5328,
+        96
+      ],
+      "id": "690dcc04-9b78-4528-ab15-26c93cdc19fa",
+      "name": "Escolhe agente aleatorio2",
+      "executeOnce": true,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/agents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5120,
+        96
+      ],
+      "id": "c2715023-857b-409e-9a9d-4e72dd6b885a",
+      "name": "Lista Agentes Chatwoot2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const categorias = $input.all();\n\nconst blocoTexto = categorias\n  .map(item => item.json.categoria_completa)\n  .filter(Boolean)\n  .join('\\n');\n\nreturn [\n  {\n    json: {\n      categorias_texto: blocoTexto\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3744,
+        96
+      ],
+      "id": "89702bac-ec98-4a84-b3b8-5479f0c1066a",
+      "name": "Junta as categorias do GLPI"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um classificador de categorias de chamados de TI.\n\nSua tarefa é analisar a mensagem enviada pelo usuário e escolher a categoria mais adequada dentro da lista de categorias disponíveis.\n\nRegras obrigatórias:\n\n1. Compare a mensagem do usuário com todas as categorias disponíveis.\n2. Use o nome da categoria e a descrição para decidir.\n3. Retorne somente o ID numérico da categoria escolhida.\n4. Não retorne texto explicativo.\n5. Não retorne JSON.\n6. Não retorne o nome da categoria.\n7. Não invente categoria.\n8. Use obrigatoriamente um dos IDs existentes na lista de categorias.\n9. Se a mensagem estiver ambígua, escolha a categoria mais provável.\n10. Se nenhuma categoria fizer sentido, retorne o ID da categoria \"Sem categoria\".\n11. Se o usuário falar sobre WinThor, rotina, permissão, acesso, erro em rotina, pedido, relatório ou sistema interno, priorize categorias relacionadas a WinThor ou Sistemas.\n12. Se o usuário pedir criação de usuário, liberação de acesso ou novo login, use \"Novo acesso\".\n13. Se o usuário pedir alteração de permissão em sistema já existente, use \"Permissão Winthor\" quando for relacionado ao WinThor.\n14. Se o usuário falar que esqueceu senha, senha bloqueada ou precisa trocar senha, use \"Reset de senha\".\n15. Se o usuário falar que internet caiu ou está sem conexão, use \"Sem internet\".\n16. Se o usuário falar sobre lentidão geral no computador, use \"Computador lento\".\n17. Se o usuário falar sobre lentidão em sistema, internet ou rede, escolha a categoria mais específica.\n18. Se o usuário falar de impressora, impressão, não imprime ou erro ao imprimir, escolha entre \"Impressora\" e \"Impressão\", dando preferência para \"Impressora\" quando for problema no equipamento.\n19. Se o usuário falar de Ion Vendas, sincronização de vendas no Ion, pedido no Ion ou app Ion Vendas, use \"Ion Vendas\".\n20. Se o usuário pedir para derrubar sessão/acesso do WinThor, use \"Derrubar acesso\".\n\nCategorias disponíveis:\n{{ $('Junta as categorias do GLPI').first().json.categorias_texto }}\n\nResumo da solicitação:\n{{ $('Separa variáveis da resposta1').item.json.resposta_original.resumo }}\n\nRetorne apenas o ID da categoria."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3952,
+        96
+      ],
+      "id": "209b7fb2-e1c5-416d-ab72-6ced7b26160a",
+      "name": "Define categoria",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    CONCAT(\n        'ID: ', id,\n        ' | Categoria: ', name,\n        ' | Descrição: ', COALESCE(comment, '')\n    ) AS categoria_completa\nFROM\n    glpi_itilcategories\nWHERE\n    entities_id = 0\nORDER BY\n    name;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        3536,
+        96
+      ],
+      "id": "42617a84-ce46-496d-ae4d-b36539ee1206",
+      "name": "Consulta categorias GLPI",
+      "credentials": {
+        "mySql": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "MySQL GLPI Suporte Supply"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você deve analisar o histórico da conversa e identificar se o usuário informou o número de um chamado.\n\nHistórico da conversa:\n{{\n$('Busca histórico mensagens3').all()\n.map(item => item.json)\n.map(msg => {\nconst origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\nreturn `${origem}: ${msg.mensagem || ''}`;\n})\n.join('\\n')\n}}\n\nRegras:\n\n* Responda somente em JSON válido.\n* Retorne o número do chamado informado pelo usuário na variável `numero_chamado`.\n* Não explique nada.\n* Não adicione texto antes ou depois do JSON.\n* Se houver mais de um número de chamado, retorne o mais recente informado pelo usuário.\n* Se o usuário não informou número de chamado, retorne `numero_chamado` vazio.\n* Ignore números que não pareçam ser número de chamado, como telefone, data, horário, CPF, CNPJ ou código de erro.\n\nFormato obrigatório da resposta:\n\n{\n\"numero_chamado\": \"12345\"\n}\n\nSe não houver número de chamado:\n\n{\n\"numero_chamado\": \"\"\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        480
+      ],
+      "id": "1c3949db-cfdc-4c5f-9588-4aea2a0293da",
+      "name": "Procura número do chamado",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const texto = $json.output?.[0]?.content?.[0]?.text || '';\n\nlet numeroChamado = '';\n\ntry {\n  const dados = JSON.parse(texto);\n  numeroChamado = dados.numero_chamado || '';\n} catch (error) {\n  const match = String(texto).match(/\\b\\d+\\b/);\n  numeroChamado = match ? match[0] : '';\n}\n\nreturn [\n  {\n    json: {\n      numero_chamado: numeroChamado\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        480
+      ],
+      "id": "21dc2ae9-3162-4799-b816-5b9962544eba",
+      "name": "Isola variável"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  id,\n  CONCAT(\n    'Título: ', COALESCE(name, ''),\n    '\\nDescrição: ', COALESCE(content, '')\n  ) AS titulo_descricao\nFROM glpi_tickets\nWHERE id = {{ $json.numero_chamado }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        3120,
+        480
+      ],
+      "id": "78582181-33c1-4a43-b945-7d5e7ae7f3e3",
+      "name": "Consulta chamado",
+      "credentials": {
+        "mySql": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "MySQL GLPI Suporte Supply"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function limparHtml(texto) {\n  if (!texto) return '';\n\n  return String(texto)\n    // Converte entidades HTML escapadas\n    .replace(/&#60;/g, '<')\n    .replace(/&#62;/g, '>')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#34;/g, '\"')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&amp;/g, '&')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/ /g, ' ')\n\n    // Quebras de linha para fechamento de blocos HTML\n    .replace(/<\\/p>/gi, '\\n')\n    .replace(/<\\/h1>/gi, '\\n')\n    .replace(/<\\/h2>/gi, '\\n')\n    .replace(/<\\/h3>/gi, '\\n')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n\n    // Remove todas as tags HTML restantes\n    .replace(/<[^>]*>/g, '')\n\n    // Limpa espaços e quebras excessivas\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n\\s+\\n/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nreturn items.map(item => {\n  const tituloDescricao = item.json.titulo_descricao || '';\n\n  return {\n    json: {\n      id: item.json.id,\n      titulo_descricao_limpo: limparHtml(tituloDescricao)\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3328,
+        480
+      ],
+      "id": "e3ac4915-7002-451d-9c25-375daf34cc4e",
+      "name": "Remove tags HTML"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você deve analisar o conteúdo do chamado e gerar um resumo curto com as informações mais relevantes.\n\nConteúdo do chamado:\n{{ $json.titulo_descricao_limpo }}\n\nRegras:\n\nResuma de forma clara e objetiva.\nMantenha apenas as informações importantes para entender a solicitação.\nNão invente informações.\nNão inclua dados que não estejam no conteúdo do chamado.\nSe houver valores, datas, nomes, justificativas, equipamentos, sistemas ou locais, mantenha no resumo.\nIgnore saudações, textos repetidos e formatações desnecessárias.\nResponda apenas com o resumo final, sem explicações adicionais."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3536,
+        480
+      ],
+      "id": "a856d8bf-28f3-4037-b287-d0a197f08b19",
+      "name": "Gera resumo do chamado",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\n{{ $json.output[0].content[0].text }}\n\nUm técnico irá entrar em contato."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3872,
+        480
+      ],
+      "id": "b07ce4e6-abd5-46a7-9eb1-6e970df20476",
+      "name": "Envia Mensagem de volta8",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_atendimento_ti.atendimento\n  (data_hora, status, numero, mensagem, assunto, origem, assunto_escolhido)\nVALUES\n(\n  NOW() AT TIME ZONE 'America/Fortaleza',\n  'iniciado',\n  '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt }}',\n  '{{ $json.message.conversation }}',\n  'definido',\n  'tecnico',\n  '{{ $('Assunto definido?').item.json.assunto_escolhido }}'\n)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4080,
+        480
+      ],
+      "id": "f1e7ea90-d052-4712-b72d-75bef63e0742",
+      "name": "Grava mensagem11",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\n  SET status = 'finalizado'\nWHERE numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4288,
+        480
+      ],
+      "id": "66757cf9-1263-4c58-97fd-05ade33cbe19",
+      "name": "Encerra atendimento3",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/conversations/{{ $('Webhook').first().json.body.data.chatwootConversationId }}/assignments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    assignee_id: $('Escolhe agente aleatorio3').first().json.assignee_id\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4912,
+        480
+      ],
+      "id": "0616ac5d-6412-46c2-8522-0f11a0ca1d4e",
+      "name": "Atribui Conversa ao Agente3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const itensDoNoAgentes = $('Lista Agentes Chatwoot3').all();\n\nlet agentes = itensDoNoAgentes.map(item => item.json);\n\n// Remove inválidos\nagentes = agentes.filter(agente => agente && agente.id);\n\n// Mantém somente agentes confirmados\nagentes = agentes.filter(agente => agente.confirmed === true);\n\n// Remove administrador / DTI\nagentes = agentes.filter(agente => agente.role === 'agent');\n\n// Se quiser ignorar alguém específico, coloque o ID aqui\nconst idsIgnorados = [\n  // 6, // Alailson, se quiser testar excluindo ele\n];\n\nagentes = agentes.filter(agente => !idsIgnorados.includes(agente.id));\n\nif (!agentes.length) {\n  throw new Error('Nenhum agente válido encontrado para atribuição.');\n}\n\n// Sorteio\nconst indice = Math.floor(Math.random() * agentes.length);\nconst agenteEscolhido = agentes[indice];\n\nreturn [\n  {\n    json: {\n      assignee_id: agenteEscolhido.id,\n      nome_agente: agenteEscolhido.name || agenteEscolhido.available_name || '',\n      email_agente: agenteEscolhido.email || '',\n      indice_sorteado: indice,\n      total_itens_do_no_agentes: itensDoNoAgentes.length,\n      total_agentes_validos: agentes.length,\n      agentes_considerados: agentes.map(a => ({\n        id: a.id,\n        nome: a.name || a.available_name,\n        email: a.email,\n        status: a.availability_status,\n        confirmed: a.confirmed,\n        role: a.role\n      }))\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        480
+      ],
+      "id": "6a117feb-61d8-48c1-8fa8-6dac0520f838",
+      "name": "Escolhe agente aleatorio3",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/api/v1/accounts/1/agents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "xxxxxxxxxxxxxxxxxxxx"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4496,
+        480
+      ],
+      "id": "26dd404c-a1b5-4e19-9315-316fb9a7dcb2",
+      "name": "Lista Agentes Chatwoot3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d29c162a-8cd2-4a50-a368-172abce7030c",
+              "leftValue": "={{ $('Webhook').item.json.body.data.key.fromMe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -48,
+        -16
+      ],
+      "id": "3a88e4aa-687b-48ea-9e3e-217fa42354e2",
+      "name": "Ignora eu mesmo"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{\n  $('Webhook').item.json.body?.data?.key?.remoteJid\n  ?? $('Webhook').item.json.body?.data?.key?.remoteJidAlt\n  ?? $('Webhook').item.json.body?.body?.data?.key?.remoteJid\n  ?? $('Webhook').item.json.body?.body?.data?.key?.remoteJidAlt\n  ?? ''\n}}",
+                    "rightValue": "@g.us",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    },
+                    "id": "7851471f-ee0f-4f2e-a669-f277891b5c66"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        160,
+        -16
+      ],
+      "id": "cabd58b7-1cdd-4558-90a1-a0c8e3756592",
+      "name": "Ignora Grupo1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xxxxxxxxxxxxxxxxxxxx/message/sendText/chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}"
+            },
+            {
+              "name": "text",
+              "value": "=*Glados:*\nMinha base de conhecimento não possui informações suficientes para te ajudar.\nEm breve um analista irá atende-lo."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2576,
+        1024
+      ],
+      "id": "1e9ee70e-8935-4d05-8dd5-1b2db7092336",
+      "name": "Envia Mensagem de volta7",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API Evo chat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_atendimento_ti.atendimento\nSET \n  assunto = 'definindo',\n  assunto_escolhido = NULL\nWHERE id = (\n  SELECT id\n  FROM bot_atendimento_ti.atendimento\n  WHERE status = 'iniciado'\n    AND numero = '{{ $('Webhook').item.json.body.data.key.remoteJid || $('Webhook').item.json.body.data.key.remoteJidAlt}}'\n  ORDER BY data_hora DESC\n  LIMIT 1\n)\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2368,
+        400
+      ],
+      "id": "72a01270-5a9a-4860-b045-5cd791b1ac6d",
+      "name": "Remove assunto",
+      "credentials": {
+        "postgres": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "Postgres Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-6-luna",
+          "mode": "list",
+          "cachedResultName": "GPT-6-LUNA"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Você é um assistente virtual do Departamento de TI.\n\nSua tarefa é gerar uma mensagem curta e profissional com:\n\n1. Um resumo objetivo das informações fornecidas pelo usuário durante a conversa.\n2. A informação de que um atendente da equipe de TI dará continuidade ao atendimento.\n\nHistórico da conversa:\n{{\n  $('Busca histórico mensagens3').all()\n    .map(item => item.json)\n    .map(msg => {\n      const origem = msg.origem === 'usuario' ? 'Usuário' : msg.origem === 'tecnico' ? 'Técnico' : msg.origem || 'Mensagem';\n      return `${origem}: ${msg.mensagem || ''}`;\n    })\n    .join('\\n')\n}}\n\nRegras:\n\n* Responda somente em JSON válido.\n* Não escreva explicações fora do JSON.\n* A mensagem deve ser curta, clara, educada e profissional.\n* Resuma apenas as informações úteis fornecidas pelo usuário.\n* Não inclua perguntas feitas pelo bot no resumo.\n* Não inclua saudações, agradecimentos ou mensagens sem relação com a solicitação.\n* Não invente informações.\n* Não mencione base de conhecimento, banco de dados, prompt, automação ou funcionamento interno do agente.\n* Não diga que houve erro ou que não foi encontrada uma orientação.\n* Informe que um atendente da equipe de TI dará continuidade ao atendimento.\n* Não prometa prazo exato.\n* Não faça novas perguntas.\n* Não informe número de chamado, a menos que ele esteja claramente disponível no histórico.\n* Escreva a mensagem como se estivesse falando diretamente com o usuário.\n\nFormato obrigatório da resposta:\n\n{\n\"mensagem\": \"resumo da solicitação e aviso de que um atendente dará continuidade\"\n}\n\nExemplo de resposta:\n\n{\n\"mensagem\": \"Você informou que não está conseguindo imprimir e que a impressora está conectada à rede. Um atendente da equipe de TI dará continuidade ao seu atendimento assim que possível.\"\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        272
+      ],
+      "id": "41a436a2-d98a-43a4-b365-232c071591bd",
+      "name": "Resumo do atendimento e encerramento1",
+      "credentials": {
+        "openAiApi": {
+          "id": "xxxxxxxxxxxxxxxxxxxx",
+          "name": "API OpenAI - Glados Autoatendimento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const texto = $json.output?.[0]?.content?.[0]?.text || '';\n\nlet dados;\n\ntry {\n  dados = JSON.parse(texto);\n} catch (error) {\n  throw new Error(`Não foi possível converter a resposta em JSON: ${texto}`);\n}\n\nreturn [\n  {\n    json: {\n      mensagem: dados.mensagem || ''\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        272
+      ],
+      "id": "f5a7b0ea-de93-4e7f-82a8-9c00f0bde434",
+      "name": "Isola variável1"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verifica chatwoot se conversa está atribuida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica se já tem conversa em andamento": {
+      "main": [
+        [
+          {
+            "node": "Triagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Triagem": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assunto definido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem": {
+      "main": [
+        [
+          {
+            "node": "Verifica saudação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boas vindas": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica saudação": {
+      "main": [
+        [
+          {
+            "node": "Problema ou Saudação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Problema ou Saudação": {
+      "main": [
+        [
+          {
+            "node": "Consulta assuntos1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Boas vindas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já sabe o que quer?": {
+      "main": [
+        [
+          {
+            "node": "Grava assunto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca histórico mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia Mensagem de volta7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "O que tu quer?": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens": {
+      "main": [
+        [
+          {
+            "node": "O que tu quer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta1": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem3": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens1": {
+      "main": [
+        [
+          {
+            "node": "Consulta assuntos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta assuntos": {
+      "main": [
+        [
+          {
+            "node": "Já sabe o que quer?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já sabe o que quer?1": {
+      "main": [
+        [
+          {
+            "node": "Separa variáveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa variáveis": {
+      "main": [
+        [
+          {
+            "node": "Já sabe o que quer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assunto definido?": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Grava mensagem3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta base de conhecimento": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava assunto": {
+      "main": [
+        [
+          {
+            "node": "Consulta base de conhecimento1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta base de conhecimento1": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens2": {
+      "main": [
+        [
+          {
+            "node": "Pergunta de acordo com a base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pergunta de acordo com a base": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta2": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens3": {
+      "main": [
+        [
+          {
+            "node": "Já pode encerrar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pergunta de acordo com a base1": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem4": {
+      "main": [
+        [
+          {
+            "node": "Consulta base de conhecimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta3": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Áudio, texto ou imagem?": {
+      "main": [
+        [
+          {
+            "node": "Pega imagem da conversa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verifica se já tem conversa em andamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pega áudio da conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pega imagem da conversa": {
+      "main": [
+        [
+          {
+            "node": "Converte base64 em imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converte base64 em imagem": {
+      "main": [
+        [
+          {
+            "node": "Interpreta imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpreta imagem": {
+      "main": [
+        [
+          {
+            "node": "Separa interpretação em variavel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pega áudio da conversa": {
+      "main": [
+        [
+          {
+            "node": "Converte base64 em áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converte base64 em áudio": {
+      "main": [
+        [
+          {
+            "node": "Converte de OPUS para OGG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converte de OPUS para OGG": {
+      "main": [
+        [
+          {
+            "node": "Interpreta áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpreta áudio": {
+      "main": [
+        [
+          {
+            "node": "Verifica se já tem conversa em andamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa interpretação em variavel": {
+      "main": [
+        [
+          {
+            "node": "Verifica se já tem conversa em andamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta assuntos1": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já sabe o que quer?2": {
+      "main": [
+        [
+          {
+            "node": "Separa variáveis1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens5": {
+      "main": [
+        [
+          {
+            "node": "Já sabe o que quer?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa variáveis1": {
+      "main": [
+        [
+          {
+            "node": "Já sabe o que quer?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já sabe o que quer?3": {
+      "main": [
+        [
+          {
+            "node": "Grava assunto1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca histórico mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia Mensagem de volta7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava assunto1": {
+      "main": [
+        [
+          {
+            "node": "Consulta base de conhecimento2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta base de conhecimento2": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca histórico mensagens6": {
+      "main": [
+        [
+          {
+            "node": "Pergunta de acordo com a base2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pergunta de acordo com a base2": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta4": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já pode encerrar?": {
+      "main": [
+        [
+          {
+            "node": "Separa variáveis2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa variáveis2": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Pergunta de acordo com a base1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resumo do atendimento e encerramento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resumo do atendimento e encerramento1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Procura número do chamado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove assunto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumo do atendimento e encerramento": {
+      "main": [
+        [
+          {
+            "node": "Separa variáveis da resposta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta5": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem8": {
+      "main": [
+        [
+          {
+            "node": "Consulta categorias GLPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GLPI Sup - Iniciar Sessão": {
+      "main": [
+        [
+          {
+            "node": "GLPI Sup - Abre Chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GLPI Sup - Abre Chamado": {
+      "main": [
+        [
+          {
+            "node": "Encerra atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa variáveis da resposta1": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encerra atendimento": {
+      "main": [
+        [
+          {
+            "node": "Informa o número do chamado aberto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Informa o número do chamado aberto": {
+      "main": [
+        [
+          {
+            "node": "Lista Agentes Chatwoot2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta6": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem9": {
+      "main": [
+        [
+          {
+            "node": "Encerra atendimento1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encerra atendimento1": {
+      "main": [
+        [
+          {
+            "node": "Lista Agentes Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem10": {
+      "main": [
+        [
+          {
+            "node": "Encerra atendimento2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encerra atendimento2": {
+      "main": [
+        [
+          {
+            "node": "Lista Agentes Chatwoot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica chatwoot se conversa está atribuida": {
+      "main": [
+        [
+          {
+            "node": "Está atribuida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Está atribuida?": {
+      "main": [
+        [
+          {
+            "node": "Ignora eu mesmo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista Agentes Chatwoot1": {
+      "main": [
+        [
+          {
+            "node": "Escolhe agente aleatorio1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolhe agente aleatorio1": {
+      "main": [
+        [
+          {
+            "node": "Atribui Conversa ao Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista Agentes Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Escolhe agente aleatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolhe agente aleatorio": {
+      "main": [
+        [
+          {
+            "node": "Atribui Conversa ao Agente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolhe agente aleatorio2": {
+      "main": [
+        [
+          {
+            "node": "Atribui Conversa ao Agente2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista Agentes Chatwoot2": {
+      "main": [
+        [
+          {
+            "node": "Escolhe agente aleatorio2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta as categorias do GLPI": {
+      "main": [
+        [
+          {
+            "node": "Define categoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define categoria": {
+      "main": [
+        [
+          {
+            "node": "GLPI Sup - Iniciar Sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta categorias GLPI": {
+      "main": [
+        [
+          {
+            "node": "Junta as categorias do GLPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procura número do chamado": {
+      "main": [
+        [
+          {
+            "node": "Isola variável",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Isola variável": {
+      "main": [
+        [
+          {
+            "node": "Consulta chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta chamado": {
+      "main": [
+        [
+          {
+            "node": "Remove tags HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove tags HTML": {
+      "main": [
+        [
+          {
+            "node": "Gera resumo do chamado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera resumo do chamado": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta8": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava mensagem11": {
+      "main": [
+        [
+          {
+            "node": "Encerra atendimento3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encerra atendimento3": {
+      "main": [
+        [
+          {
+            "node": "Lista Agentes Chatwoot3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolhe agente aleatorio3": {
+      "main": [
+        [
+          {
+            "node": "Atribui Conversa ao Agente3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista Agentes Chatwoot3": {
+      "main": [
+        [
+          {
+            "node": "Escolhe agente aleatorio3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ignora eu mesmo": {
+      "main": [
+        [
+          {
+            "node": "Ignora Grupo1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ignora Grupo1": {
+      "main": [
+        [
+          {
+            "node": "Áudio, texto ou imagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Mensagem de volta7": {
+      "main": [
+        [
+          {
+            "node": "Grava mensagem10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove assunto": {
+      "main": [
+        [
+          {
+            "node": "Busca histórico mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumo do atendimento e encerramento1": {
+      "main": [
+        [
+          {
+            "node": "Isola variável1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Isola variável1": {
+      "main": [
+        [
+          {
+            "node": "Envia Mensagem de volta6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "xxxxxxxxxxxxxxxxxxxx"
+  }
+}
