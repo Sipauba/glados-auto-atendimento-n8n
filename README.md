@@ -27,6 +27,12 @@ flowchart TD
 
 O Chatwoot participa dos encaminhamentos humanos e da atribuição da conversa a agentes. Consulte [docs/arquitetura.md](docs/arquitetura.md) e [docs/fluxo-atendimento.md](docs/fluxo-atendimento.md).
 
+## Workflow no n8n
+
+![Visão geral do workflow Glados no editor do n8n](docs/images/workflow-glados.png)
+
+[Baixar a imagem em resolução original](docs/images/workflow-glados.png) · [Baixar o workflow JSON](workflows/glados-autoatendimento.json)
+
 ## Base de conhecimento
 
 Este projeto tem dependência lógica do repositório [kb_glados_dti](https://github.com/Sipauba/kb_glados_dti). Este repositório contém a automação e orquestração; o outro contém o conteúdo e as regras da base de conhecimento. Ela define assuntos, informações necessárias, ordem de coleta e quando continuar perguntando, encerrar, abrir chamado ou encaminhar para uma pessoa.
